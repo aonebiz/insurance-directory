@@ -1,299 +1,515 @@
-# -*- coding: utf-8 -*-
-"""
-일일 현황 카카오톡 자동 발송 스크립트
-"""
-import pandas as pd
-import requests
-import json
-from datetime import datetime, date, timedelta
-import glob, os, sys
+@@ -0,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="보험인력">
+<meta name="theme-color" content="#1a2744">
+<title>보험사 인력 현황</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  :root {
+    --navy: #1a2744;
+    --navy-light: #243357;
+    --navy-mid: #2e4070;
+    --accent: #4f8ef7;
+    --accent-light: #7ab0ff;
+    --gold: #e8b84b;
+    --bg: #f0f3fa;
+    --white: #ffffff;
+    --gray: #8892a4;
+    --text: #1a2744;
+    --border: #dde3f0;
+    --card-bg: #ffffff;
+    --mobile-color: #2c9e6b;
+    --office-color: #4f8ef7;
+  }
 
-# =============================================
-# ★ 설정 영역
-# =============================================
-config = {
-    "KAKAO_TOKEN":         "6qH9twT6l-GLT11FaMy87tXBAH5E-QgeAAAAAQoNFN0AAAGc1fYkJbfuZLkpz6yP",
-    "DATA_FOLDER":         r"C:\daily-report\data",
-    "SALES_FILE_PATTERN":  "수임 및 매출현황_grdComp_*.xlsx",
-    "REPORT_FILE_PATTERN": "*최초보고서*일일현황*.xlsx",
-    "KIJIL_FILE_PATTERN":  "인보험 처리기일 현황_grdComp_*.xlsx",
-    "BIZ_DAYS_FILE":       r"C:\daily-report\biz_days.json",
-    "REFRESH_TOKEN":       "jl6Ws2LgwaCRYfnEE_4gmxXdXLq2yRaCAAAAAgoXNVcAAAGePaNJN7fuZLkpz6yP",
+  body {
+    font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+    padding: 16px 16px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 20px rgba(26,39,68,0.3);
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-icon {
+    width: 36px; height: 36px;
+    background: var(--gold);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .header h1 {
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .header h1 span {
+    color: var(--gold);
+  }
+  .count-badge {
+    background: rgba(255,255,255,0.15);
+    color: var(--accent-light);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+
+  /* SEARCH */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray);
+    font-size: 16px;
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    background: rgba(255,255,255,0.12);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    padding: 12px 40px 12px 42px;
+    font-size: 16px;
+    color: white;
+    outline: none;
+    transition: all 0.2s;
+    -webkit-appearance: none;
+  }
+  .search-input::placeholder { color: rgba(255,255,255,0.5); }
+  .search-input:focus {
+    background: rgba(255,255,255,0.18);
+    border-color: var(--accent-light);
+  }
+  .clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255,255,255,0.6);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    display: none;
+    line-height: 1;
+    padding: 4px;
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 4px;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+  .tab-count {
+    font-size: 11px;
+    opacity: 0.8;
+    margin-left: 3px;
+  }
+
+  /* CONTENT */
+  .content {
+    padding: 12px;
+    padding-bottom: 20px;
+  }
+
+  /* STATS BAR */
+  .stats-bar {
+    background: white;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 6px rgba(26,39,68,0.07);
+  }
+  .stats-text {
+    font-size: 13px;
+    color: var(--gray);
+  }
+  .stats-text strong {
+    color: var(--navy);
+    font-weight: 700;
+  }
+  .sort-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--gray);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* COMPANY GROUP */
+  .company-group { margin-bottom: 10px; }
+  .company-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px;
+  }
+  .company-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -0.2px;
+  }
+  .company-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .company-count {
+    font-size: 11px;
+    color: var(--gray);
+    background: var(--bg);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* PERSON CARD */
+  .card {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 8px rgba(26,39,68,0.08);
+    border: 1px solid rgba(26,39,68,0.05);
+    transition: transform 0.1s, box-shadow 0.1s;
+    -webkit-touch-callout: none;
+  }
+  .card:active {
+    transform: scale(0.99);
+    box-shadow: 0 1px 4px rgba(26,39,68,0.05);
+  }
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .person-info { flex: 1; }
+  .person-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+  .person-position {
+    font-size: 12px;
+    color: var(--gray);
+    margin-top: 3px;
+  }
+  .bojong-badge {
+    background: var(--navy);
+    color: white;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+  .dept-text {
+    font-size: 12px;
+    color: #6b7a9e;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .work-badge {
+    display: inline-block;
+    background: rgba(79,142,247,0.1);
+    color: var(--accent);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  /* PHONE BUTTONS */
+  .phone-row {
+    display: flex;
+    gap: 8px;
+  }
+  .phone-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .phone-btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn-mobile {
+    background: rgba(44,158,107,0.1);
+    color: var(--mobile-color);
+    border: 1px solid rgba(44,158,107,0.2);
+  }
+  .btn-office {
+    background: rgba(79,142,247,0.1);
+    color: var(--office-color);
+    border: 1px solid rgba(79,142,247,0.2);
+  }
+  .btn-disabled {
+    background: var(--bg);
+    color: #ccc;
+    border: 1px solid var(--border);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .phone-icon { font-size: 14px; }
+  .phone-label { font-size: 10px; opacity: 0.7; }
+
+  /* NOTE BADGE */
+  .note-badge {
+    display: inline-block;
+    background: rgba(232,184,75,0.15);
+    color: #a07c1a;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    margin-top: 6px;
+    font-weight: 600;
+  }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--gray);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .empty p { font-size: 14px; }
+
+  /* HIGHLIGHT */
+  .hl { background: rgba(232,184,75,0.35); border-radius: 3px; padding: 0 1px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="header-title">
+      <div class="header-icon">🏢</div>
+      <h1>보험사 <span>인력현황</span></h1>
+    </div>
+    <div class="count-badge" id="totalCount">총 188명</div>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input type="text" class="search-input" id="searchInput" placeholder="이름, 회사, 부서, 직급 검색..." autocomplete="off">
+    <button class="clear-btn" id="clearBtn" onclick="clearSearch()">✕</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('all')" id="tab-all">전체<span class="tab-count" id="cnt-all"></span></button>
+    <button class="tab" onclick="switchTab('손보')" id="tab-손보">손보<span class="tab-count" id="cnt-손보"></span></button>
+    <button class="tab" onclick="switchTab('생보')" id="tab-생보">생보<span class="tab-count" id="cnt-생보"></span></button>
+    <button class="tab" onclick="switchTab('공제')" id="tab-공제">공제<span class="tab-count" id="cnt-공제"></span></button>
+  </div>
+</div>
+
+<div class="content">
+  <div class="stats-bar">
+    <div class="stats-text">검색결과: <strong id="resultCount">188명</strong></div>
+  </div>
+  <div id="listContainer"></div>
+</div>
+
+<script>
+const DATA = {"손보": [{"company": "삼성화재", "bojong": "장기", "dept": "장기보험보상팀", "name": "김범중", "position": "상무/팀장", "mobile": "010-2243-5933", "office": "02-758-4520", "work": "임원", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상기획파트", "name": "최재경", "position": "파트장", "mobile": "010-4312-9407", "office": "02-758-7749", "work": "파트장", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상운영파트", "name": "민성진", "position": "파트장", "mobile": "010-4331-3393", "office": "02-758-4481", "work": "파트장", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상기획파트", "name": "송상민", "position": "프로", "mobile": "010-3139-5343", "office": "02-758-4215", "work": "외주관리", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상기획파트", "name": "이송이", "position": "프로", "mobile": "010-3418-3405", "office": "02-758-4762", "work": "외주관리", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상N/W협력1파트", "name": "권미경", "position": "파트장", "mobile": "010-8941-2809", "office": "02-6025-6017", "work": "인조사배당관리", "note": ""}, {"company": "삼성화재", "bojong": "장기", "dept": "장기보상N/W협력2파트", "name": "김남기", "position": "파트장", "mobile": "010-2045-1434", "office": "02-3390-6800", "work": "물조사배당관리", "note": ""}, {"company": "삼성화재", "bojong": "일반", "dept": "일반보험업무팀", "name": "나희균", "position": "팀장", "mobile": "010-9332-1265", "office": "02-758-4594", "work": "임원", "note": "임원대행"}, {"company": "삼성화재", "bojong": "일반", "dept": "일반보상1파트", "name": "배채섭", "position": "파트장", "mobile": "010-5911-7702", "office": "02-758-4837", "work": "파트장", "note": ""}, {"company": "삼성화재", "bojong": "일반", "dept": "일반보상2파트", "name": "윤경우", "position": "파트장", "mobile": "010-4805-5632", "office": "02-758-7635", "work": "파트장", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사본부", "name": "김경종", "position": "상무", "mobile": "010-5268-2842", "office": "02-3701-8913", "work": "임원", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사기획파트", "name": "백태현", "position": "부장/부서장", "mobile": "010-9720-8855", "office": "02-3701-3210", "work": "부서장", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사지원파트", "name": "하준웅", "position": "부장/부서장", "mobile": "010-4414-4752", "office": "02-3701-3160", "work": "부서장", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사지원파트", "name": "정규민", "position": "차장", "mobile": "010-7445-4342", "office": "02-3701-3190", "work": "외주법인총괄", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사지원파트", "name": "김규채", "position": "과장", "mobile": "010-9380-8606", "office": "02-3701-3179", "work": "계약관리", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기손사부", "name": "김덕성", "position": "부장", "mobile": "010-4327-7106", "office": "02-3289-6160", "work": "부서장/실무", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기배상센터", "name": "노종현", "position": "차장/센터장", "mobile": "010-3134-0790", "office": "02-3289-6164", "work": "센터장/실무", "note": ""}, {"company": "현대해상", "bojong": "장기", "dept": "장기재물센터", "name": "곽호창", "position": "수석/센터장", "mobile": "010-2639-6563", "office": "02-3289-6157", "work": "센터장/실무", "note": ""}, {"company": "현대해상", "bojong": "일반", "dept": "일반보험업무본부", "name": "이재용", "position": "상무", "mobile": "", "office": "02-3701-8904", "work": "임원", "note": ""}, {"company": "현대해상", "bojong": "일반", "dept": "일반손해사정부", "name": "이주환", "position": "부장/부서장", "mobile": "010-4751-3671", "office": "02-3701-8480", "work": "부서장", "note": ""}, {"company": "현대해상", "bojong": "일반", "dept": "일반손해사정부", "name": "박천우", "position": "차장/팀장", "mobile": "010-6622-5323", "office": "02-3701-3448", "work": "손사지원팀장", "note": ""}, {"company": "메리츠", "bojong": "장기", "dept": "장기보상부문", "name": "이광수", "position": "부문장", "mobile": "010-9392-2693", "office": "02-3707-8500", "work": "부문장", "note": ""}, {"company": "메리츠", "bojong": "장기", "dept": "장기보상지원팀", "name": "황현수", "position": "팀장", "mobile": "010-4640-3790", "office": "02-3707-8635", "work": "임원", "note": ""}, {"company": "메리츠", "bojong": "장기", "dept": "장기보상법인운영센터", "name": "주민수", "position": "리더", "mobile": "", "office": "02-3707-8591", "work": "인부문 리더", "note": ""}, {"company": "메리츠", "bojong": "장기", "dept": "장기재물손해사정센터", "name": "장성윤", "position": "리더", "mobile": "010-6232-4896", "office": "", "work": "재물부문 리더", "note": ""}, {"company": "메리츠", "bojong": "일반", "dept": "기업보험총괄", "name": "최원준", "position": "총괄", "mobile": "010-2941-2283", "office": "02-6464-6130", "work": "총괄", "note": ""}, {"company": "메리츠", "bojong": "일반", "dept": "일반손해사정1파트", "name": "김준호", "position": "리더", "mobile": "010-3516-6598", "office": "02-6464-3820", "work": "계약관리", "note": ""}, {"company": "메리츠", "bojong": "일반", "dept": "일반손해사정2파트", "name": "김민태", "position": "리더", "mobile": "010-7148-0786", "office": "02-3786-2510", "work": "파트총괄", "note": ""}, {"company": "DB손보", "bojong": "보상", "dept": "보상서비스실", "name": "조화태", "position": "실장", "mobile": "010-3743-9510", "office": "02-3011-3570", "work": "실장", "note": ""}, {"company": "DB손보", "bojong": "보상", "dept": "보상기획파트", "name": "임재필", "position": "파트장", "mobile": "010-7467-4497", "office": "02-3011-3565", "work": "파트총괄", "note": ""}, {"company": "DB손보", "bojong": "장기", "dept": "장기보상본부", "name": "신배식", "position": "본부장", "mobile": "010-2391-9905", "office": "02-3011-3580", "work": "임원", "note": ""}, {"company": "DB손보", "bojong": "장기", "dept": "장기보상지원파트", "name": "김춘환", "position": "파트장", "mobile": "010-2736-4348", "office": "02-3011-3759", "work": "외주관리", "note": ""}, {"company": "DB손보", "bojong": "일반", "dept": "일반업무본부", "name": "배성원", "position": "본부장", "mobile": "010-4095-3126", "office": "02-3011-5700", "work": "임원", "note": ""}, {"company": "DB손보", "bojong": "일반", "dept": "일반보상파트", "name": "박중현", "position": "파트장", "mobile": "010-6289-5392", "office": "02-3011-5666", "work": "파트총괄", "note": ""}, {"company": "DB손보", "bojong": "일반", "dept": "일반보상파트", "name": "허성민", "position": "수석", "mobile": "010-3842-2779", "office": "02-3011-5670", "work": "외주관리", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기보험부문장", "name": "신덕만", "position": "전무/부문장", "mobile": "010-6287-6224", "office": "02-6900-2013", "work": "부문장", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기보험보상본부장", "name": "박영미", "position": "전무/본부장", "mobile": "010-2253-0026", "office": "02-6900-2047", "work": "임원", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기기획파트", "name": "김동진", "position": "부장/파트장", "mobile": "010-8650-2763", "office": "02-6900-2202", "work": "장기기획파트총괄", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기보상지원파트", "name": "안효상", "position": "차장/파트장", "mobile": "010-2033-0859", "office": "02-6900-3701", "work": "장기보상지원파트", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기보상변화관리파트", "name": "백윤희", "position": "부장/파트장", "mobile": "010-2105-1158", "office": "02-6900-3714", "work": "파트장", "note": ""}, {"company": "KB손보", "bojong": "장기", "dept": "장기보상변화관리파트", "name": "조성은", "position": "차장", "mobile": "010-8527-0625", "office": "02-6900-3747", "work": "외주관리", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보험부문", "name": "박상규", "position": "전무/부문장", "mobile": "010-2245-3420", "office": "02-6900-2017", "work": "부문장", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보험상품본부", "name": "정재근", "position": "상무/본부장", "mobile": "010-6312-2781", "office": "02-6900-2045", "work": "임원", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보상부", "name": "손상재", "position": "부장", "mobile": "010-2869-7007", "office": "02-6900-3052", "work": "외주관리", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보상부", "name": "김철호", "position": "과장/팀장", "mobile": "010-8125-1389", "office": "02-6900-3117", "work": "지원팀장", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보상부", "name": "신동일", "position": "과장/팀장", "mobile": "010-8125-3946", "office": "02-6900-3171", "work": "재물팀장", "note": ""}, {"company": "KB손보", "bojong": "일반", "dept": "일반보상부", "name": "장용관", "position": "차장/팀장", "mobile": "010-7466-0511", "office": "02-6900-3012", "work": "특종팀장", "note": ""}, {"company": "농협손보", "bojong": "장기", "dept": "장기보험부", "name": "임광식", "position": "부장", "mobile": "010-3229-4925", "office": "02-3786-7760", "work": "임원(연봉제일반직)", "note": ""}, {"company": "농협손보", "bojong": "장기", "dept": "장기보험지원팀", "name": "정영희", "position": "팀장", "mobile": "010-7746-5221", "office": "02-3786-7771", "work": "3급", "note": ""}, {"company": "농협손보", "bojong": "장기", "dept": "장기보험지급팀", "name": "김현진", "position": "팀장", "mobile": "010-5542-2307", "office": "02-6967-7646", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "장기", "dept": "장기보험지원파트", "name": "김태우", "position": "파트장", "mobile": "", "office": "02-3786-7595", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "일반", "dept": "일반보험부", "name": "김석현", "position": "부장", "mobile": "010-5418-0724", "office": "02-3786-7860", "work": "임원(M급)", "note": ""}, {"company": "농협손보", "bojong": "일반", "dept": "재물보험지급팀", "name": "김민철", "position": "팀장", "mobile": "", "office": "02-6967-7560", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "일반", "dept": "배상보험지급팀", "name": "이해운", "position": "팀장", "mobile": "010-2573-8782", "office": "02-3786-7631", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "농업", "dept": "농업보험부문", "name": "고우일", "position": "부사장", "mobile": "010-9640-6212", "office": "02-3786-7631", "work": "부사장", "note": ""}, {"company": "농협손보", "bojong": "농업", "dept": "농업보험부", "name": "박현규", "position": "부장", "mobile": "010-5169-1052", "office": "02-6967-7550", "work": "임원(연봉제일반직)", "note": ""}, {"company": "농협손보", "bojong": "농업", "dept": "농업보험지원팀", "name": "안성용", "position": "팀장", "mobile": "010-3681-5282", "office": "02-3786-7631", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "농업", "dept": "과수원예지급팀", "name": "윤병진", "position": "팀장", "mobile": "", "office": "02-3967-7480", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "농업", "dept": "논밭지급팀", "name": "전병훈", "position": "팀장", "mobile": "010-9473-6688", "office": "02-6967-7475", "work": "연봉제일반직", "note": ""}, {"company": "농협손보", "bojong": "정책", "dept": "정책보험부", "name": "김승겸", "position": "부장", "mobile": "", "office": "02-2172-3731", "work": "임원(M급)", "note": ""}, {"company": "농협손보", "bojong": "정책", "dept": "정책보험지원팀", "name": "윤영준", "position": "팀장", "mobile": "010-3786-7881", "office": "02-3786-7881", "work": "3급", "note": ""}, {"company": "농협손보", "bojong": "정책", "dept": "정책보험지급팀", "name": "황상천", "position": "팀장", "mobile": "010-2325-2510", "office": "02-6967-7650", "work": "연봉제일반직", "note": ""}, {"company": "롯데", "bojong": "장기", "dept": "장기총괄", "name": "홍성훈", "position": "총괄장", "mobile": "010-3306-9073", "office": "02-3455-3030", "work": "임원", "note": ""}, {"company": "롯데", "bojong": "장기", "dept": "장기보상그룹", "name": "권대현", "position": "그룹장", "mobile": "010-9636-0302", "office": "02-3455-3750", "work": "그룹장(임원역할)", "note": ""}, {"company": "롯데", "bojong": "장기", "dept": "장기보상관리팀", "name": "김인호", "position": "팀장", "mobile": "010-2696-6088", "office": "02-3455-3856", "work": "팀장", "note": ""}, {"company": "롯데", "bojong": "장기", "dept": "장기보상관리팀", "name": "조호성", "position": "수석", "mobile": "010-3020-4426", "office": "02-3455-3783", "work": "파트너사관리", "note": ""}, {"company": "롯데", "bojong": "일반", "dept": "Corporate Solution총괄", "name": "오명식", "position": "총괄장", "mobile": "010-5597-0757", "office": "02-3455-3200", "work": "임원", "note": ""}, {"company": "롯데", "bojong": "일반", "dept": "일반보험그룹", "name": "강민철", "position": "그룹장", "mobile": "010-3213-4979", "office": "02-3455-3769", "work": "그룹장(임원역할)", "note": ""}, {"company": "롯데", "bojong": "일반", "dept": "일반보상팀", "name": "이찬", "position": "팀장", "mobile": "010-3356-0859", "office": "02-3455-3197", "work": "팀장", "note": ""}, {"company": "롯데", "bojong": "일반", "dept": "일반손사센터", "name": "김기경", "position": "수석", "mobile": "010-2292-7159", "office": "02-3455-3076", "work": "외주관리", "note": ""}, {"company": "롯데", "bojong": "일반", "dept": "일반손사센터", "name": "맹시영", "position": "책임", "mobile": "", "office": "02-3455-3081", "work": "외주관리", "note": ""}, {"company": "한화손보", "bojong": "장기", "dept": "장기보험실", "name": "김종곤", "position": "상무/실장", "mobile": "010-9092-8334", "office": "02-316-8286", "work": "실장", "note": ""}, {"company": "한화손보", "bojong": "장기", "dept": "장기보상본부", "name": "서상협", "position": "상무/본부장", "mobile": "010-9500-0127", "office": "02-316-0299", "work": "임원", "note": ""}, {"company": "한화손보", "bojong": "장기", "dept": "장기보상관리파트", "name": "김상필", "position": "파트장", "mobile": "010-9500-0544", "office": "02-316-0878", "work": "파트총괄", "note": ""}, {"company": "한화손보", "bojong": "장기", "dept": "위탁관리소파트", "name": "장미향", "position": "소파트장", "mobile": "010-5250-1006", "office": "02-316-0873", "work": "위탁관리", "note": ""}, {"company": "한화손보", "bojong": "장기", "dept": "장기보상지원파트", "name": "김동욱", "position": "파트장", "mobile": "010-9004-2875", "office": "02-316-0752", "work": "파트총괄", "note": ""}, {"company": "한화손보", "bojong": "일반", "dept": "기업보험부문", "name": "이동현", "position": "전무/부문장", "mobile": "010-2297-9290", "office": "02-316-8322", "work": "부문장", "note": ""}, {"company": "한화손보", "bojong": "일반", "dept": "일반보험팀", "name": "박영목", "position": "상무/팀장", "mobile": "010-2805-8458", "office": "02-316-0861", "work": "임원", "note": ""}, {"company": "한화손보", "bojong": "일반", "dept": "일반손해사정파트", "name": "박상호", "position": "파트장", "mobile": "010-8984-4659", "office": "02-316-0867", "work": "파트장", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상실", "name": "남준우", "position": "상무/실장", "mobile": "010-6551-6574", "office": "02-2002-6025", "work": "임원", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상지원팀", "name": "손명호", "position": "팀장", "mobile": "010-8125-7589", "office": "02-2002-7965", "work": "팀장", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상기획파트", "name": "이현서", "position": "파트장", "mobile": "010-4185-1739", "office": "02-2002-6011", "work": "파트장", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상품질관리파트", "name": "이정윤", "position": "파트장", "mobile": "010-4757-2420", "office": "02-2002-6255", "work": "외주관리", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상시스템개선파트", "name": "김민영", "position": "파트장", "mobile": "010-3441-6275", "office": "02-2002-7920", "work": "파트장", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상기획파트", "name": "이성민", "position": "과장", "mobile": "010-5333-5296", "office": "02-2002-6194", "work": "외주관리", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상품질관리파트", "name": "정현중", "position": "대리", "mobile": "010-5193-6737", "office": "02-2002-7925", "work": "재물심사외주관리", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상1센터/1파트", "name": "이정화", "position": "센터장", "mobile": "010-5151-3977", "office": "02-6260-8607", "work": "관리총괄/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "서울장기보상2파트", "name": "손성구", "position": "파트장", "mobile": "010-2764-4588", "office": "02-6276-7383", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "서울장기보상3파트", "name": "정래호", "position": "파트장", "mobile": "010-3039-3208", "office": "02-6260-8635", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "재물배책파트", "name": "성경모", "position": "파트장", "mobile": "010-9500-8584", "office": "02-6260-8601", "work": "재물배책파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기보상2센터", "name": "박범대", "position": "센터장", "mobile": "010-2612-0671", "office": "02-6276-7314", "work": "관리총괄/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "광주장기보상파트", "name": "소민수", "position": "파트장", "mobile": "010-7700-2333", "office": "02-6276-7319", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "부산장기보상2파트", "name": "김상화", "position": "파트장", "mobile": "010-9990-3438", "office": "02-6260-8655", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "대전장기보상파트", "name": "임신재", "position": "파트장", "mobile": "010-2425-9981", "office": "02-6276-7344", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "장기전문보상센터", "name": "조영태", "position": "센터장", "mobile": "010-9500-8592", "office": "02-6260-8662", "work": "전담보상총괄/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "전문보상1파트", "name": "여운호", "position": "파트장", "mobile": "010-6322-0826", "office": "02-6260-8680", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "장기", "dept": "전문보상2파트", "name": "임창묵", "position": "파트장", "mobile": "010-7494-5222", "office": "02-6260-8663", "work": "파트장/실무", "note": ""}, {"company": "흥국화재", "bojong": "일반", "dept": "법인사업본부", "name": "박인섭", "position": "본부장", "mobile": "010-9119-9070", "office": "02-2002-6262", "work": "임원", "note": ""}, {"company": "흥국화재", "bojong": "일반", "dept": "일반손해사정팀", "name": "김재겸", "position": "팀장", "mobile": "010-5275-7811", "office": "02-2002-6076", "work": "팀장", "note": ""}, {"company": "흥국화재", "bojong": "일반", "dept": "일반손해사정팀", "name": "박찬주", "position": "과장", "mobile": "010-6542-8139", "office": "02-2002-6240", "work": "계약관리", "note": ""}, {"company": "하나손보", "bojong": "장/일", "dept": "보상서비스본부", "name": "임규삼", "position": "상무", "mobile": "010-2880-6982", "office": "02-6902-2302", "work": "임원", "note": ""}, {"company": "하나손보", "bojong": "장/일", "dept": "장기일반보상지원팀", "name": "전지훈", "position": "팀장", "mobile": "010-4912-8166", "office": "02-6670-8830", "work": "보상총괄", "note": ""}, {"company": "하나손보", "bojong": "장/일", "dept": "장기일반보상지원팀", "name": "이효은", "position": "책임", "mobile": "010-6670-8764", "office": "02-6670-8764", "work": "외주관리", "note": ""}, {"company": "카카오손보", "bojong": "보상", "dept": "보상실", "name": "이윤경", "position": "실장", "mobile": "010-7149-7180", "office": "031-8063-2421", "work": "임원", "note": ""}, {"company": "카카오손보", "bojong": "보상", "dept": "보상기획팀", "name": "장우진", "position": "크루", "mobile": "010-9069-0888", "office": "031-8063-2403", "work": "계약관리", "note": ""}, {"company": "카카오손보", "bojong": "보상", "dept": "보상운영팀", "name": "김남균", "position": "팀장", "mobile": "010-9330-0009", "office": "031-8063-2428", "work": "외주관리", "note": ""}, {"company": "AXA", "bojong": "장/일", "dept": "고객서비스본부", "name": "임중수", "position": "본부장", "mobile": "010-9199-6030", "office": "", "work": "임원", "note": ""}, {"company": "AXA", "bojong": "장/일", "dept": "A&H손해사정지원팀", "name": "박원준", "position": "팀장", "mobile": "010-9199-6156", "office": "", "work": "팀장", "note": ""}, {"company": "AXA", "bojong": "장/일", "dept": "A&H손해사정지원팀", "name": "최광수", "position": "파트장", "mobile": "010-9199-6237", "office": "", "work": "파트장", "note": ""}, {"company": "AXA", "bojong": "장/일", "dept": "A&H손해사정지원팀", "name": "조헌일", "position": "책임", "mobile": "010-9808-3562", "office": "02-3479-3042", "work": "외주관리", "note": ""}, {"company": "AIG", "bojong": "보상", "dept": "Claims", "name": "유재우", "position": "본부장", "mobile": "010-5222-2646", "office": "02-2260-7800", "work": "임원", "note": ""}, {"company": "AIG", "bojong": "장기", "dept": "PI", "name": "이혜빈", "position": "부장/부서장", "mobile": "010-8714-1906", "office": "02-2260-6529", "work": "개인보험보상총괄", "note": ""}, {"company": "AIG", "bojong": "장기", "dept": "PI", "name": "박상영", "position": "팀장", "mobile": "010-7115-8564", "office": "02-2260-6504", "work": "개인보험보상", "note": ""}, {"company": "AIG", "bojong": "장기", "dept": "PI", "name": "조유나", "position": "팀장", "mobile": "010-8956-8708", "office": "02-2260-6526", "work": "보상업무팀", "note": ""}, {"company": "AIG", "bojong": "일반", "dept": "Commercial", "name": "김성문", "position": "팀장", "mobile": "010-9115-2545", "office": "02-2260-6931", "work": "화재특종보상총괄", "note": ""}, {"company": "AIG", "bojong": "일반", "dept": "Commercial", "name": "정경임", "position": "팀장", "mobile": "010-9233-0387", "office": "02-2260-6556", "work": "해상보험총괄", "note": ""}], "생보": [{"company": "삼성생명", "bojong": "보상", "dept": "보험금지급팀", "name": "장재순", "position": "상무/팀장", "mobile": "010-3463-4694", "office": "02-772-6931", "work": "임원", "note": ""}, {"company": "삼성생명", "bojong": "보상", "dept": "보험금품질관리파트", "name": "박상일", "position": "부장/파트장", "mobile": "010-4603-3309", "office": "02-2074-2718", "work": "파트장", "note": ""}, {"company": "삼성생명", "bojong": "보상", "dept": "보험금심사지원파트", "name": "이나연", "position": "부장/파트장", "mobile": "010-6222-8311", "office": "02-772-6138", "work": "파트장", "note": ""}, {"company": "삼성생명", "bojong": "보상", "dept": "보험금품질관리파트", "name": "강성윤", "position": "프로", "mobile": "010-2548-1491", "office": "02-2095-5848", "work": "외주관리", "note": ""}, {"company": "한화생명", "bojong": "보상", "dept": "마케팅실", "name": "전준수", "position": "본부장", "mobile": "010-6299-8907", "office": "02-789-7545", "work": "임원", "note": ""}, {"company": "한화생명", "bojong": "보상", "dept": "보험심사팀", "name": "김종원", "position": "부장/팀장", "mobile": "010-7737-6022", "office": "02-789-8516", "work": "팀장", "note": ""}, {"company": "한화생명", "bojong": "보상", "dept": "보험심사팀", "name": "임근옥", "position": "부장/파트장", "mobile": "010-9002-2765", "office": "02-789-8373", "work": "파트장", "note": ""}, {"company": "한화생명", "bojong": "보상", "dept": "보험심사팀", "name": "신승정", "position": "차장", "mobile": "010-8976-2585", "office": "02-789-7830", "work": "외주관리", "note": ""}, {"company": "한화생명", "bojong": "보상", "dept": "보험심사팀", "name": "엄준홍", "position": "차장", "mobile": "010-7600-2357", "office": "02-789-7406", "work": "외주관리", "note": ""}, {"company": "교보생명", "bojong": "보상", "dept": "보험서비스지원실", "name": "유정구", "position": "실장", "mobile": "010-2656-7783", "office": "02-721-6200", "work": "임원", "note": ""}, {"company": "교보생명", "bojong": "보상", "dept": "보험서비스기획팀", "name": "김시옥", "position": "팀장", "mobile": "010-2550-7678", "office": "02-721-3718", "work": "팀장", "note": ""}, {"company": "교보생명", "bojong": "보상", "dept": "보험서비스기획팀", "name": "박정근", "position": "파트장", "mobile": "010-4595-4729", "office": "02-721-6207", "work": "외주과리", "note": ""}, {"company": "교보생명", "bojong": "보상", "dept": "보험서비스기획팀", "name": "한태화", "position": "과장", "mobile": "010-8767-6529", "office": "02-721-6320", "work": "외주관리", "note": ""}, {"company": "ABL생명", "bojong": "보상", "dept": "고객지원본부", "name": "홍우곤", "position": "본부장", "mobile": "010-9034-6443", "office": "02-3787-7494", "work": "임원", "note": "직무대행"}, {"company": "ABL생명", "bojong": "보상", "dept": "보험금심사팀", "name": "김은경", "position": "부장/팀장", "mobile": "010-3912-0286", "office": "02-3787-7495", "work": "클레임총괄", "note": ""}, {"company": "ABL생명", "bojong": "보상", "dept": "보험금심사팀", "name": "김진영", "position": "부장", "mobile": "010-2736-7637", "office": "02-3787-7467", "work": "업체관리", "note": ""}, {"company": "ABL생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이권우", "position": "차장", "mobile": "010-3301-8783", "office": "02-3787-7475", "work": "조사/심사관리", "note": ""}, {"company": "라이나생명", "bojong": "보상", "dept": "Claim", "name": "서민호", "position": "이사", "mobile": "", "office": "02-3781-1155", "work": "임원", "note": ""}, {"company": "라이나생명", "bojong": "보상", "dept": "Claim", "name": "서민정", "position": "부장/팀장", "mobile": "010-3033-0704", "office": "02-3781-1288", "work": "팀장", "note": ""}, {"company": "라이나생명", "bojong": "보상", "dept": "Claim", "name": "이유리", "position": "차장", "mobile": "010-6678-7030", "office": "02-3781-2044", "work": "계약관리", "note": ""}, {"company": "라이나생명", "bojong": "보상", "dept": "Claim", "name": "차은미", "position": "차장", "mobile": "010-5588-1473", "office": "02-3775-7063", "work": "조사관리", "note": ""}, {"company": "라이나생명", "bojong": "보상", "dept": "Claim", "name": "권미향", "position": "차장", "mobile": "010-9281-1581", "office": "02-3781-1341", "work": "심사관리", "note": ""}, {"company": "흥국생명", "bojong": "보상", "dept": "상품업무실장", "name": "손면정", "position": "상무", "mobile": "", "office": "02-2002-7232", "work": "임원", "note": ""}, {"company": "흥국생명", "bojong": "보상", "dept": "보험금심사팀", "name": "고영환", "position": "팀장", "mobile": "010-9829-9894", "office": "", "work": "외주관리", "note": ""}, {"company": "흥국생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이상철", "position": "과장", "mobile": "", "office": "02-2002-7535", "work": "외주관리", "note": ""}, {"company": "흥국생명", "bojong": "보상", "dept": "총무팀", "name": "이상준", "position": "대리", "mobile": "", "office": "02-2002-7878", "work": "", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "고객지원본부", "name": "서혜연", "position": "상무", "mobile": "010-6330-6621", "office": "02-728-9106", "work": "임원", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이훈종", "position": "팀장", "mobile": "010-7410-7796", "office": "02-728-9625", "work": "팀장", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "보험금심사팀", "name": "김경", "position": "과장", "mobile": "010-3293-3682", "office": "02-728-9014", "work": "실손", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이정은", "position": "과장", "mobile": "010-6641-3166", "office": "02-728-9648", "work": "정액", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "보험금심사팀", "name": "손석우", "position": "파트장", "mobile": "010-3271-8474", "office": "02-728-9683", "work": "조사", "note": ""}, {"company": "동양생명", "bojong": "보상", "dept": "보험금심사팀", "name": "김모훈", "position": "수석", "mobile": "010-9421-7775", "office": "02-728-9803", "work": "조사", "note": ""}, {"company": "농협생명", "bojong": "보상", "dept": "지급심사팀", "name": "고금숙", "position": "부장", "mobile": "010-8784-3886", "office": "02-3786-8197", "work": "임원", "note": ""}, {"company": "농협생명", "bojong": "보상", "dept": "지급심사팀", "name": "김정민", "position": "파트장", "mobile": "010-9044-9664", "office": "02-6786-8883", "work": "팀장", "note": ""}, {"company": "농협생명", "bojong": "보상", "dept": "지급심사팀", "name": "박지숙", "position": "차장", "mobile": "010-5278-8065", "office": "02-6930-4630", "work": "외주관리", "note": ""}, {"company": "농협생명", "bojong": "보상", "dept": "지급심사팀", "name": "조은희", "position": "과장", "mobile": "", "office": "", "work": "심사관리", "note": ""}, {"company": "AIA생명", "bojong": "보상", "dept": "고객총괄본부장", "name": "유신옥", "position": "부사장", "mobile": "", "office": "02-3787-4858", "work": "임원", "note": ""}, {"company": "AIA생명", "bojong": "보상", "dept": "클레임팀", "name": "전은주", "position": "차장", "mobile": "", "office": "02-2259-9256", "work": "팀장", "note": ""}, {"company": "AIA생명", "bojong": "보상", "dept": "클레임팀", "name": "김나연", "position": "과장", "mobile": "010-8878-8162", "office": "02-2259-9253", "work": "외주관리", "note": ""}, {"company": "푸본생명", "bojong": "보상", "dept": "경영지원", "name": "공윤수", "position": "상무", "mobile": "", "office": "02-3284-7351", "work": "", "note": ""}, {"company": "푸본생명", "bojong": "보상", "dept": "고객지원실", "name": "양희태", "position": "실장", "mobile": "", "office": "02-6940-7826", "work": "임원", "note": "수석부장"}, {"company": "푸본생명", "bojong": "보상", "dept": "보험금팀", "name": "한성우", "position": "팀장", "mobile": "010-7574-0574", "office": "", "work": "", "note": ""}, {"company": "푸본생명", "bojong": "보상", "dept": "보험금팀", "name": "김대환", "position": "파트장", "mobile": "010-4874-1504", "office": "02-3284-7181", "work": "외주관리", "note": ""}, {"company": "신한생명", "bojong": "보상", "dept": "고객혁신그룹장", "name": "박재우", "position": "부사장", "mobile": "", "office": "", "work": "임원", "note": ""}, {"company": "신한생명", "bojong": "보상", "dept": "보험금심사팀", "name": "김영환", "position": "팀장", "mobile": "010-8232-3351", "office": "02-3455-6088", "work": "", "note": ""}, {"company": "신한생명", "bojong": "보상", "dept": "보험금심사팀", "name": "손창희", "position": "프로", "mobile": "010-8955-2451", "office": "02-3455-4641", "work": "", "note": ""}, {"company": "신한생명", "bojong": "보상", "dept": "보험금심사팀", "name": "신효진", "position": "프로", "mobile": "010-4505-1128", "office": "02-3455-6308", "work": "", "note": ""}, {"company": "신한생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이재민", "position": "프로", "mobile": "010-2895-6235", "office": "02-3455-6006", "work": "", "note": ""}, {"company": "미래에셋", "bojong": "보상", "dept": "보험금심사본부", "name": "배민혁", "position": "본부장", "mobile": "010-4054-1420", "office": "02-32715-5343", "work": "임원", "note": ""}, {"company": "미래에셋", "bojong": "보상", "dept": "보험금심사팀", "name": "이경석", "position": "팀장", "mobile": "010-8666-2923", "office": "", "work": "", "note": ""}, {"company": "미래에셋", "bojong": "보상", "dept": "보험금기획팀", "name": "장석희", "position": "팀장", "mobile": "010-4853-3208", "office": "", "work": "기획", "note": ""}, {"company": "미래에셋", "bojong": "보상", "dept": "보험금기획팀", "name": "조성철", "position": "선임매니저", "mobile": "010-2272-5392", "office": "02-2287-4013", "work": "심사관리", "note": ""}, {"company": "미래에셋", "bojong": "보상", "dept": "보험금기획팀", "name": "신성은", "position": "선임매니저", "mobile": "010-8641-8903", "office": "02-2287-4016", "work": "계약관리", "note": ""}, {"company": "KDB생명", "bojong": "보상", "dept": "경영지원", "name": "곽광오", "position": "상무", "mobile": "", "office": "02-6303-5100", "work": "", "note": ""}, {"company": "KDB생명", "bojong": "보상", "dept": "경영지원", "name": "강대근", "position": "이사/실장", "mobile": "", "office": "02-5303-2500", "work": "임원", "note": ""}, {"company": "KDB생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이용환", "position": "팀장", "mobile": "010-6431-2515", "office": "", "work": "", "note": ""}, {"company": "KDB생명", "bojong": "보상", "dept": "보험금심사팀", "name": "이심우", "position": "과장", "mobile": "010-4500-5430", "office": "", "work": "외주관리", "note": ""}, {"company": "IM라이프", "bojong": "보상", "dept": "담당임원", "name": "허원", "position": "전무", "mobile": "", "office": "02-2087-9312", "work": "임원", "note": ""}, {"company": "IM라이프", "bojong": "보상", "dept": "보험금심사부", "name": "배석환", "position": "부장", "mobile": "010-7157-6810", "office": "", "work": "", "note": ""}, {"company": "IM라이프", "bojong": "보상", "dept": "보험금심사부", "name": "김도균", "position": "과장", "mobile": "010-5007-6107", "office": "", "work": "조사관리", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "담당임원", "name": "조성은", "position": "상무", "mobile": "", "office": "02-2144-2072", "work": "임원", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "보험금파트", "name": "최희강", "position": "부장", "mobile": "", "office": "02-2144-2704", "work": "", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "보험금파트", "name": "김선경", "position": "책임매니저", "mobile": "010-9265-6685", "office": "02-2144-2395", "work": "외주관리", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "보험금파트", "name": "조홍석", "position": "책임매니저", "mobile": "010-4588-4887", "office": "02-2144-2796", "work": "외주관리", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "보험금파트", "name": "손주연", "position": "선임매니져", "mobile": "010-7705-3763", "office": "02-2144-2205", "work": "", "note": ""}, {"company": "KB라이프", "bojong": "보상", "dept": "보험금파트(SIU)", "name": "김덕겸", "position": "책임매니저", "mobile": "010-7378-3216", "office": "02-2144-2335", "work": "", "note": ""}], "공제": [{"company": "새마을", "bojong": "보상", "dept": "공제보상부", "name": "주종필", "position": "부장", "mobile": "010-5385-4052", "office": "02-2145-9350", "work": "임원", "note": ""}, {"company": "새마을", "bojong": "기획", "dept": "공제보상부", "name": "정대웅", "position": "차장", "mobile": "010-4749-8364", "office": "02-2145-9352", "work": "계약관리", "note": ""}, {"company": "새마을", "bojong": "생명", "dept": "생명보상팀", "name": "김다빈", "position": "과장", "mobile": "", "office": "02-2145-9359", "work": "팀장", "note": ""}, {"company": "새마을", "bojong": "손해", "dept": "손해보상팀", "name": "신효철", "position": "차장", "mobile": "010-6327-3279", "office": "02-2145-9369", "work": "팀장", "note": ""}, {"company": "지방재정공제", "bojong": "보상", "dept": "공제사업본부", "name": "임묵", "position": "본부장", "mobile": "", "office": "", "work": "임원", "note": "임명직"}, {"company": "지방재정공제", "bojong": "보상", "dept": "공제보상부", "name": "김영식", "position": "부장", "mobile": "010-2739-2934", "office": "02-3274-2020", "work": "부장", "note": "임원대행"}, {"company": "지방재정공제", "bojong": "보상", "dept": "공제보상부", "name": "홍상철", "position": "차장", "mobile": "", "office": "02-3274-2024", "work": "조사", "note": ""}, {"company": "지방재정공제", "bojong": "보상", "dept": "공제보상부", "name": "이우영", "position": "과장", "mobile": "010-9803-8774", "office": "02-3274-2028", "work": "시민안전", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "보험사업부", "name": "고부현", "position": "부장", "mobile": "010-8630-4807", "office": "내선 0260", "work": "임원", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "심사지원팀", "name": "신동헌", "position": "팀장", "mobile": "010-5370-7000", "office": "내선 3006", "work": "지원", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "심사지원팀", "name": "조종빈", "position": "과장", "mobile": "010-8429-7904", "office": "내선 2086", "work": "외주관리", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "보험심사팀", "name": "양은하", "position": "센터장", "mobile": "010-9470-5820", "office": "내선 0312", "work": "센터장", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "보험심사팀", "name": "박동진", "position": "파트장", "mobile": "010-4651-5562", "office": "내선 0310", "work": "지급심사", "note": ""}, {"company": "교직원공제", "bojong": "보상", "dept": "보험심사팀", "name": "이동협", "position": "파트장", "mobile": "010-4620-9163", "office": "내선 0313", "work": "사고급여금", "note": ""}, {"company": "신협", "bojong": "보상", "dept": "공제지원서비스본부", "name": "김영수", "position": "본부장", "mobile": "010-3451-4943", "office": "042-720-1500", "work": "임원", "note": ""}, {"company": "신협", "bojong": "보상", "dept": "생명보상서비스팀", "name": "현미란", "position": "팀장", "mobile": "010-9426-3842", "office": "042-720-1551", "work": "팀장", "note": ""}, {"company": "신협", "bojong": "보상", "dept": "손해보상서비스팀", "name": "오창익", "position": "팀장", "mobile": "010-7151-9455", "office": "042-720-1571", "work": "팀장", "note": ""}, {"company": "신협", "bojong": "보상", "dept": "생명보상서비스팀", "name": "공춘배", "position": "과장", "mobile": "010-5300-8176", "office": "042-720-1548", "work": "외주관리", "note": ""}, {"company": "수협", "bojong": "보상", "dept": "공제보험본부", "name": "최호준", "position": "본부/부장", "mobile": "", "office": "", "work": "임원", "note": ""}, {"company": "수협", "bojong": "보상", "dept": "지급심사팀", "name": "권월용", "position": "팀장", "mobile": "", "office": "", "work": "팀장", "note": ""}, {"company": "수협", "bojong": "보상", "dept": "지급심사팀", "name": "김남용", "position": "과장", "mobile": "", "office": "02-2240-2963", "work": "계약관리", "note": ""}, {"company": "수협", "bojong": "보상", "dept": "지급심사팀", "name": "김병주", "position": "대리", "mobile": "", "office": "02-2240-2545", "work": "", "note": ""}, {"company": "해운조합", "bojong": "보상", "dept": "공제운영실", "name": "장희광", "position": "실장", "mobile": "", "office": "02-6096-2100", "work": "임원", "note": ""}, {"company": "해운조합", "bojong": "보상", "dept": "공제보상팀", "name": "강병철", "position": "팀장", "mobile": "", "office": "02-6096-2191", "work": "팀장", "note": ""}, {"company": "교육시설안전원", "bojong": "보상", "dept": "공제사업처", "name": "이기훈", "position": "처장", "mobile": "", "office": "02-781-0150", "work": "임원", "note": "공제사업처 총괄"}, {"company": "교육시설안전원", "bojong": "보상", "dept": "공제사업팀", "name": "김남선", "position": "팀장", "mobile": "", "office": "02-781-0197", "work": "팀장", "note": ""}, {"company": "교육시설안전원", "bojong": "보상", "dept": "공제사업팀", "name": "조용덕", "position": "차장", "mobile": "", "office": "02-781-6894", "work": "조사관리", "note": ""}, {"company": "전문건설공제", "bojong": "보상", "dept": "공제보상팀", "name": "노성민", "position": "차장", "mobile": "", "office": "02-3284-0403", "work": "외주관리", "note": ""}]};
+
+let currentTab = 'all';
+let searchQuery = '';
+
+function getTabData(tab) {
+  if (tab === 'all') return [...DATA['손보'], ...DATA['생보'], ...DATA['공제']];
+  return DATA[tab] || [];
 }
 
-# =============================================
-# 정렬 유틸 (한글=2칸, 영숫자=1칸)
-# =============================================
-def dw(s):
-    """문자열 표시 너비 계산"""
-    return sum(2 if ord(c) > 0x1100 else 1 for c in str(s))
+function highlight(text, query) {
+  if (!query || !text) return text || '';
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(text).replace(new RegExp(`(${escaped})`, 'gi'), '<span class="hl">$1</span>');
+}
 
-def rj(s, w):
-    """오른쪽 정렬"""
-    s = str(s)
-    return ' ' * max(w - dw(s), 0) + s
+function search(data, query) {
+  if (!query) return data;
+  const q = query.toLowerCase();
+  return data.filter(p =>
+    (p.name && p.name.toLowerCase().includes(q)) ||
+    (p.company && p.company.toLowerCase().includes(q)) ||
+    (p.dept && p.dept.toLowerCase().includes(q)) ||
+    (p.position && p.position.toLowerCase().includes(q)) ||
+    (p.bojong && p.bojong.toLowerCase().includes(q)) ||
+    (p.work && p.work.toLowerCase().includes(q)) ||
+    (p.mobile && p.mobile.includes(q)) ||
+    (p.office && p.office.includes(q))
+  );
+}
 
-def lj(s, w):
-    """왼쪽 정렬"""
-    s = str(s)
-    return s + ' ' * max(w - dw(s), 0)
+function renderCard(p, query) {
+  const mobileBtn = p.mobile
+    ? `<a href="tel:${p.mobile}" class="phone-btn btn-mobile"><span class="phone-icon">📱</span><span>${highlight(p.mobile, query)}</span></a>`
+    : `<div class="phone-btn btn-disabled"><span class="phone-icon">📱</span><span>없음</span></div>`;
+  
+  const officeBtn = p.office && !p.office.includes('내선')
+    ? `<a href="tel:${p.office}" class="phone-btn btn-office"><span class="phone-icon">☎️</span><span>${highlight(p.office, query)}</span></a>`
+    : p.office
+    ? `<div class="phone-btn btn-office" style="cursor:default"><span class="phone-icon">☎️</span><span>${p.office}</span></div>`
+    : `<div class="phone-btn btn-disabled"><span class="phone-icon">☎️</span><span>없음</span></div>`;
 
-# =============================================
-# 영업일 관리 (매월 첫 실행 시 입력)
-# =============================================
-def load_biz_config():
-    p = config["BIZ_DAYS_FILE"]
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+  const workBadge = p.work ? `<div class="work-badge">${highlight(p.work, query)}</div>` : '';
+  const noteBadge = p.note ? `<div class="note-badge">📌 ${p.note}</div>` : '';
 
-def save_biz_config(data):
-    p = config["BIZ_DAYS_FILE"]
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+  return `
+    <div class="card">
+      <div class="card-top">
+        <div class="person-info">
+          <div class="person-name">${highlight(p.name, query)}</div>
+          <div class="person-position">${highlight(p.position, query)}</div>
+        </div>
+        <div class="bojong-badge">${highlight(p.bojong, query)}</div>
+      </div>
+      <div class="dept-text">${highlight(p.company, query)} · ${highlight(p.dept, query)}</div>
+      ${workBadge}
+      <div class="phone-row">${mobileBtn}${officeBtn}</div>
+      ${noteBadge}
+    </div>
+  `;
+}
 
-def get_business_days(target_date):
-    """매월 첫 실행 시 첫 영업일, 총 영업일, 공휴일 입력
-       이후 자동으로 경과 영업일 계산 (공휴일 제외)
-    """
-    y, m = target_date.year, target_date.month
-    key  = f"{y}-{m:02d}"
-    cfg  = load_biz_config()
+function render() {
+  const allData = getTabData(currentTab);
+  const filtered = search(allData, searchQuery);
 
-    if key not in cfg:
-        print(f"\n📅 [{y}년 {m}월] 영업일 설정이 필요합니다.")
-        print(f"   (달력 확인 후 입력 / 공휴일=주말 제외 법정공휴일·대체공휴일만)")
-        while True:
-            try:
-                start = int(input(f"   {y}년 {m}월 첫 영업일 (일): "))
-                if 1 <= start <= 31: break
-            except ValueError: pass
-            print("   1~31 숫자를 입력하세요.")
-        while True:
-            try:
-                total = int(input(f"   {y}년 {m}월 총 영업일 수 : "))
-                if 1 <= total <= 31: break
-            except ValueError: pass
-            print("   1~31 숫자를 입력하세요.")
-        print(f"   공휴일 입력 (쉼표로 구분, 없으면 엔터)")
-        print(f"   예) 5,25  → {m}월 5일, 25일이 공휴일")
-        holidays_input = input(f"   {y}년 {m}월 공휴일 (일): ").strip()
-        if holidays_input:
-            holidays = [int(d.strip()) for d in holidays_input.split(',') if d.strip().isdigit()]
-        else:
-            holidays = []
-        cfg[key] = {"start": start, "total": total, "holidays": holidays}
-        save_biz_config(cfg)
-        print(f"   ✅ {y}년 {m}월: {start}일 시작, 총 {total}영업일, 공휴일 {holidays} 저장!\n")
+  // Group by company
+  const groups = {};
+  filtered.forEach(p => {
+    if (!groups[p.company]) groups[p.company] = [];
+    groups[p.company].push(p);
+  });
 
-    start    = cfg[key]["start"]
-    total    = cfg[key]["total"]
-    holidays = set(cfg[key].get("holidays", []))
+  let html = '';
+  if (filtered.length === 0) {
+    html = `<div class="empty">
+      <div class="empty-icon">🔍</div>
+      <h3>검색 결과 없음</h3>
+      <p>"${searchQuery}"에 해당하는 인력이 없습니다.</p>
+    </div>`;
+  } else {
+    Object.entries(groups).forEach(([company, people]) => {
+      html += `<div class="company-group">
+        <div class="company-header">
+          <div class="company-name">${highlight(company, searchQuery)}</div>
+          <div class="company-line"></div>
+          <div class="company-count">${people.length}명</div>
+        </div>`;
+      people.forEach(p => { html += renderCard(p, searchQuery); });
+      html += '</div>';
+    });
+  }
 
-    # 첫 영업일(start)부터 target_date까지 평일 수 (공휴일 제외)
-    elapsed = sum(
-        1 for d in range(start, target_date.day + 1)
-        if date(y, m, d).weekday() < 5 and d not in holidays
-    )
-    return max(1, min(elapsed, total)), total
+  document.getElementById('listContainer').innerHTML = html;
+  document.getElementById('resultCount').textContent = `${filtered.length}명`;
 
-# =============================================
-# 데이터 추출
-# =============================================
-def find_latest_file(folder, pattern):
-    files = glob.glob(os.path.join(folder, pattern))
-    return max(files, key=os.path.getmtime) if files else None
+  // Update tab counts
+  const allFiltered = search(getTabData('all'), searchQuery);
+  const sonboFiltered = search(DATA['손보'], searchQuery);
+  const saengboFiltered = search(DATA['생보'], searchQuery);
+  const gongjeFiltered = search(DATA['공제'], searchQuery);
+  document.getElementById('cnt-all').textContent = ` ${allFiltered.length}`;
+  document.getElementById('cnt-손보').textContent = ` ${sonboFiltered.length}`;
+  document.getElementById('cnt-생보').textContent = ` ${saengboFiltered.length}`;
+  document.getElementById('cnt-공제').textContent = ` ${gongjeFiltered.length}`;
+  document.getElementById('totalCount').textContent = `총 ${allFiltered.length}명`;
+}
 
-def read_excel_auto(filepath, **kwargs):
-    """엔진 자동 감지로 엑셀 읽기"""
-    for engine in ['openpyxl', 'xlrd']:
-        try:
-            return pd.read_excel(filepath, engine=engine, **kwargs)
-        except Exception:
-            continue
-    return pd.read_excel(filepath, **kwargs)
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  render();
+}
 
-def get_sales_data(fp):
-    df = pd.read_excel(fp, sheet_name='sheet1', header=None)
-    def row(idx):
-        r = df.iloc[idx]
-        iv = lambda c: int(r[c]) if pd.notna(r[c]) else 0
-        return {
-            "인":   iv(4)-iv(5),   "대인": iv(8)-iv(9),
-            "대물":  iv(12)-iv(13), "재물": iv(16)-iv(17),
-            "정책":  iv(20)-iv(21), "매출": iv(35),
-            "매출_인":  iv(25),
-            "매출_대인": iv(27),
-            "매출_대물": iv(29),
-            "매출_재물": iv(31),
-            "매출_정책": iv(33),
-        }
-    return {"총계": row(2), "손해": row(3), "공제": row(21), "생명": row(30)}
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  searchQuery = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  render();
+}
 
-def get_report_rate(fp):
-    df  = pd.read_excel(fp, header=None)
-    t   = df.iloc[-1]
-    대상  = int(t[3]) if pd.notna(t[3]) else 0
-    제출  = int(t[4]) if pd.notna(t[4]) else 0
-    율값  = t[5]
-    율   = f"{float(율값)*100:.1f}%" if isinstance(율값,(int,float)) and float(율값)<=1 \
-          else (f"{float(율값):.1f}%" if isinstance(율값,(int,float)) else "-")
-    return {"대상": 대상, "제출": 제출, "율": 율}
+document.getElementById('searchInput').addEventListener('input', function(e) {
+  searchQuery = e.target.value.trim();
+  document.getElementById('clearBtn').style.display = searchQuery ? 'block' : 'none';
+  render();
+});
 
-def get_kijil_data(fp):
-    df = pd.read_excel(fp, sheet_name='sheet1', header=None)
-    def row(idx):
-        r  = df.iloc[idx]
-        종  = int(r[2])  if pd.notna(r[2])  else 0
-        미  = int(r[9])  if pd.notna(r[9])  else 0
-        return {
-            "종결": 종, "종평": float(r[5])  if pd.notna(r[5])  and 종>0 else 0.0,
-            "미결": 미, "미평": float(r[11]) if pd.notna(r[11]) and 미>0 else 0.0,
-        }
-    상세맵 = {
-        "새마을(공제)": 22, "아이엠라이프": 31, "ABL생명": 36,
-        "AIA생명": 37,  "BNP카디프": 38, "교보생명": 41,
-        "농협생명": 42,  "동양생명": 43,  "라이나생명": 44,
-        "KB라이프": 47,  "푸본현대": 48,  "한화생명": 49,
-        "흥국화재(인)": 19, "삼성화재(인)": 12,
-    }
-    상세 = {n: row(i) for n, i in 상세맵.items()
-            if row(i)["종결"] > 0 or row(i)["미결"] > 0}
-    return {"총계": row(2), "손해": row(3), "공제": row(20), "생명": row(30), "상세": 상세}
-
-# =============================================
-# 메시지 생성
-# =============================================
-def build_message(sales, report, kijil, data_date, biz, total):
-    def st(d): return d["인"]+d["대인"]+d["대물"]+d["재물"]+d["정책"]
-    def fmt(n): return f"{int(n):,}"
-    def avgm(n): return fmt(round(n/biz)) if biz else "-"
-    def avgn(n): return str(round(n/biz)) if biz else "-"
-
-    # 상세 처리기일
-    상세줄 = ""
-    for name, d in kijil["상세"].items():
-        종 = f"{d['종결']}건/{d['종평']}일" if d['종결'] else "-"
-        미 = f"{d['미결']}건/{d['미평']}일" if d['미결'] else "-"
-        상세줄 += f"\n  {name} 종결 {종} 미결 {미}"
-
-    return (
-        f"📊 일일 현황 [{data_date}] (영업 {biz}/{total}일)\n"
-        f"─────────────────────\n\n"
-
-        f"💰 매출 현황 (총매출)\n"
-        f"합계 {fmt(sales['총계']['매출'])}원 / 일평균 {avgm(sales['총계']['매출'])}원\n"
-        f"손해 {fmt(sales['손해']['매출'])}원\n"
-        f"   인    {fmt(sales['손해']['매출_인'])}원\n"
-        f"   대인  {fmt(sales['손해']['매출_대인'])}원\n"
-        f"   대물  {fmt(sales['손해']['매출_대물'])}원\n"
-        f"   재물  {fmt(sales['손해']['매출_재물'])}원\n"
-        f"   정책  {fmt(sales['손해']['매출_정책'])}원\n"
-        f"공제 {fmt(sales['공제']['매출'])}원\n"
-        f"생명 {fmt(sales['생명']['매출'])}원\n\n"
-
-        f"📋 수임건수 (수임-반송)\n"
-        f"합계 {fmt(st(sales['총계']))}건 / 일평균 {avgn(st(sales['총계']))}건\n"
-        f"손해 인{sales['손해']['인']} 대인{sales['손해']['대인']} 대물{sales['손해']['대물']} 재물{sales['손해']['재물']} 정책{sales['손해']['정책']} = {st(sales['손해'])}건\n"
-        f"공제 인{sales['공제']['인']} 대인{sales['공제']['대인']} 대물{sales['공제']['대물']} 재물{sales['공제']['재물']} 정책{sales['공제']['정책']} = {st(sales['공제'])}건\n"
-        f"생명 인{sales['생명']['인']} = {st(sales['생명'])}건\n\n"
-
-        f"🏥 처리기일 (영업일)\n"
-        f"합계 종결 {kijil['총계']['종결']}건/{kijil['총계']['종평']}일  미결 {kijil['총계']['미결']}건/{kijil['총계']['미평']}일\n"
-        f"손해 종결 {kijil['손해']['종결']}건/{kijil['손해']['종평']}일  미결 {kijil['손해']['미결']}건/{kijil['손해']['미평']}일\n"
-        f"공제 종결 {kijil['공제']['종결']}건/{kijil['공제']['종평']}일  미결 {kijil['공제']['미결']}건/{kijil['공제']['미평']}일\n"
-        f"생명 종결 {kijil['생명']['종결']}건/{kijil['생명']['종평']}일  미결 {kijil['생명']['미결']}건/{kijil['생명']['미평']}일\n"
-        f"▼ 상세{상세줄}\n\n"
-
-        f"📝 물보험 최초보고율\n"
-        f"대상 {fmt(report['대상'])}건 / 제출 {fmt(report['제출'])}건 ({report['율']})\n"
-        f"─────────────────────\n"
-        f"📌 자동발송"
-    )
-
-# =============================================
-# 카카오톡 토큰 자동 갱신 + 발송
-# =============================================
-def refresh_access_token():
-    """리프레시 토큰으로 새 액세스 토큰 발급"""
-    res = requests.post(
-        "https://kauth.kakao.com/oauth/token",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
-            "grant_type": "refresh_token",
-            "client_id": "d1106b7979ffa7d4150475aaddd251ae",
-            "refresh_token": config["REFRESH_TOKEN"],
-        }
-    )
-    data = res.json()
-    if "access_token" in data:
-        config["KAKAO_TOKEN"] = data["access_token"]
-        # 리프레시 토큰도 갱신된 경우 저장
-        if "refresh_token" in data:
-            config["REFRESH_TOKEN"] = data["refresh_token"]
-        return True
-    return False
-
-
-def send_kakao(token, msg):
-    res = requests.post(
-        "https://kapi.kakao.com/v2/api/talk/memo/default/send",
-        headers={"Authorization": f"Bearer {token}",
-                 "Content-Type": "application/x-www-form-urlencoded"},
-        data={"template_object":
-              '{"object_type":"text","text":"'
-              + msg.replace('"','\\"').replace('\n','\\n')
-              + '","link":{"web_url":"","mobile_web_url":""}}'}
-    )
-    return res.status_code == 200, res.text
-
-# =============================================
-# 메인
-# =============================================
-def main():
-    now       = datetime.now()
-    data_dt   = (now - timedelta(days=1)).date()
-    data_date = data_dt.strftime("%Y-%m-%d")
-    folder    = config["DATA_FOLDER"]
-
-    biz, total = get_business_days(data_dt)
-    print(f"자료 기준일: {data_date} / 경과 영업일: {biz}/{total}일")
-
-    sf = find_latest_file(folder, config["SALES_FILE_PATTERN"])
-    rf = find_latest_file(folder, config["REPORT_FILE_PATTERN"])
-    kf = find_latest_file(folder, config["KIJIL_FILE_PATTERN"])
-
-    missing = (["수임및매출현황"] if not sf else []) + \
-              (["최초보고서"] if not rf else []) + \
-              (["인보험처리기일"] if not kf else [])
-    if missing:
-        print(f"❌ 파일 없음: {', '.join(missing)}\n   폴더: {folder}")
-        input("엔터를 누르면 종료..."); sys.exit(1)
-
-    print(f"✅ {os.path.basename(sf)}")
-    print(f"✅ {os.path.basename(rf)}")
-    print(f"✅ {os.path.basename(kf)}")
-
-    try:
-        sales  = get_sales_data(sf)
-        report = get_report_rate(rf)
-        kijil  = get_kijil_data(kf)
-    except Exception as e:
-        print(f"❌ 데이터 추출 오류: {e}")
-        input("엔터를 누르면 종료..."); sys.exit(1)
-
-    msg = build_message(sales, report, kijil, data_date, biz, total)
-    print("\n" + "="*44 + "\n" + msg + "\n" + "="*44 + "\n")
-
-    ok, resp = send_kakao(config["KAKAO_TOKEN"], msg)
-    if not ok and "-401" in resp:
-        print("🔄 토큰 만료 → 자동 갱신 중...")
-        if refresh_access_token():
-            ok, resp = send_kakao(config["KAKAO_TOKEN"], msg)
-    print("✅ 카카오톡 발송 완료!" if ok else f"❌ 발송 실패: {resp}")
-    input("\n엔터를 누르면 종료...")
-
-if __name__ == "__main__":
-    main()
+// Initial render
+render();
+</script>
+</body>
+</html>
